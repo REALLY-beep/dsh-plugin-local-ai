@@ -1,0 +1,4 @@
+# DSH bundle registration. The plugin appears in the installed bundle list.
+- insert:
+    - id: local-ai-workbench
+      name: 'dsh-local-ai-workbench'
