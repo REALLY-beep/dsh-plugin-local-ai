@@ -1,6 +1,6 @@
 {
   "name": "dsh-local-ai-workbench",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DSH desktop plugin for managing and running local GGUF models with llama.cpp",
   "type": "module",
   "main": "lib/index.js",

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — 2026-11-06
+
+- Fixed the Remote Gateway registration error: `addModel` now uses a plain required-parameter signature; an omitted display name is handled by the existing string normalization.
+- Made the Local AI panel itself vertically scrollable inside the DSH main-panel viewport, without relying on the host page/body scrollbar.
+- Kept scan results in the panel normal flow so the main panel scrollbar can reach every discovered GGUF and continue to the model library below.
+- Improved narrow-window scan-result layout so the Add button moves below the file path.
+
 ## 0.1.1 — 2026-11-06
 
 - Recursive GGUF discovery in the configured models directory and user-selected scan folders.
