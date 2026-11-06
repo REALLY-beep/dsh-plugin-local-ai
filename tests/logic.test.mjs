@@ -6,6 +6,11 @@ import {
   buildHubDownloadUrl,
   buildHubSearchUrls,
   buildHubSearchQueries,
+  buildHubTreeUrl,
+  extractParameterCountB,
+  extractQuantization,
+  filterHubModelsByWeight,
+  sanitizeHubTreeFiles,
   buildServerArgs,
   describeModelFile,
   formatBytes,
@@ -91,6 +96,9 @@ test('Hugging Face search mirrors llama.cpp model discovery and has a GGUF fallb
   assert.equal(primary.searchParams.get('expand[]'), 'siblings')
   assert.equal(fallback.searchParams.get('filter'), 'gguf')
   assert.equal(fallback.searchParams.get('sort'), 'trendingScore')
+  const filtered = buildHubSearchUrls('Qwen3', 'downloads', 'from8To14B')
+  assert.equal(new URL(filtered[0].url).searchParams.get('num_parameters'), 'min:8B,max:14B')
+  assert.equal(new URL(filtered[1].url).searchParams.get('num_parameters'), 'min:8B,max:14B')
 })
 
 test('Hugging Face results keep standalone GGUF files and discard projectors and split shards', () => {
@@ -128,4 +136,46 @@ test('Hugging Face search normalizes spaced model names and has a family fallbac
   assert.deepEqual(buildHubSearchQueries('Qwen3 8B GGUF'), ['Qwen3 8B GGUF', 'Qwen3-8B-GGUF', 'Qwen3'])
   assert.deepEqual(buildHubSearchQueries('Qwen3'), ['Qwen3'])
   assert.deepEqual(buildHubSearchQueries(''), [''])
+})
+
+
+test('Hugging Face GGUF metadata parses parameter count, quantization and exact tree file size', () => {
+  assert.equal(extractParameterCountB('bartowski/Qwen3-8B-GGUF'), 8)
+  assert.equal(extractParameterCountB('Qwen3.5-9B-Q4_K_M.gguf'), 9)
+  assert.equal(extractParameterCountB('ibm-granite/granite-4.0-h-micro-GGUF'), null)
+  assert.equal(extractQuantization('Qwen3-8B-Q4_K_M.gguf'), 'Q4_K_M')
+  assert.equal(buildHubTreeUrl('bartowski/Qwen3-8B-GGUF'), 'https://huggingface.co/api/models/bartowski/Qwen3-8B-GGUF/tree/main?recursive=true')
+  assert.throws(() => buildHubTreeUrl('https://example.com/repo'))
+
+  const files = sanitizeHubTreeFiles([
+    { type: 'file', path: 'Qwen3-8B-Q4_K_M.gguf', size: 4 * 1024 ** 3 },
+    { type: 'file', path: 'Qwen3-8B-Q8_0.gguf', size: 8 * 1024 ** 3 },
+    { type: 'file', path: 'mmproj-Qwen3.gguf', size: 100 },
+    { type: 'file', path: 'Qwen3-00001-of-00002.gguf', size: 100 },
+    { type: 'directory', path: 'weights' },
+  ], 'bartowski/Qwen3-8B-GGUF')
+  assert.equal(files.length, 2)
+  assert.equal(files[0].parameterCountB, 8)
+  assert.equal(files[0].quantization, 'Q4_K_M')
+  assert.equal(files[0].sizeBytes, 4 * 1024 ** 3)
+  assert.equal(files[0].sizeLabel, '4.00 GB')
+})
+
+test('Hugging Face GGUF weight filter filters individual quant files by exact byte size', () => {
+  const models = [{
+    id: 'bartowski/Qwen3-8B-GGUF',
+    files: [
+      { name: 'Qwen3-8B-Q3.gguf', sizeBytes: 1.5 * 1024 ** 3 },
+      { name: 'Qwen3-8B-Q4.gguf', sizeBytes: 4 * 1024 ** 3 },
+      { name: 'Qwen3-8B-Q8.gguf', sizeBytes: 8 * 1024 ** 3 },
+      { name: 'Qwen3-8B-unknown.gguf', sizeBytes: 0 },
+    ],
+    fileCount: 4,
+  }]
+  const filtered = filterHubModelsByWeight(models, 'from2To5GB')
+  assert.equal(filtered.length, 1)
+  assert.equal(filtered[0].fileCount, 1)
+  assert.equal(filtered[0].files[0].name, 'Qwen3-8B-Q4.gguf')
+  assert.equal(filterHubModelsByWeight(models, 'from20GB').length, 0)
+  assert.equal(filterHubModelsByWeight(models, 'any')[0].fileCount, 4)
 })

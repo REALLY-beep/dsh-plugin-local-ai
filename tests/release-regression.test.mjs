@@ -54,10 +54,13 @@ test('every exported Remote method has Host parameter names matching its Client 
 
 test('Hugging Face panel contains minimal catalogue search, sorting and file selection', async () => {
   const client = await fs.readFile(path.join(root, 'lib/client.js'), 'utf8')
-  assert.match(client, /descriptor\('searchHub', \[\s*'query', 'sort'\s*\]\)/)
-  assert.match(client, /Сначала ищем модели с фильтром llama\.cpp/)
+  assert.match(client, /descriptor\('searchHub', \[\s*'query', 'sort', 'paramsRange', 'weightRange'\s*\]\)/)
   assert.match(client, /Недавно обновлённые/)
+  assert.match(client, /Количество параметров/)
+  assert.match(client, /Размер GGUF-файла/)
+  assert.match(client, /Выбранный GGUF/)
+  assert.match(client, /Параметры: \$\{parameterLabel\}/)
   assert.match(client, /Файл модели/)
-  assert.match(client, /downloadHubModel', repo\.id, hubSelection/)
+  assert.match(client, /downloadHubModel', repo\.id, selectedFileInfo\.name/)
   assert.match(client, /mmproj/)
 })
