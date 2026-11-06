@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 — 2026-11-07
+
+- Fixed the SRC/Typepert Gateway argument-name mismatch in `saveSettings`: the Host method parameter now matches the Client descriptor field `settings`.
+- Added a regression test that compares every exported Remote method's Host parameter names with the Client descriptor, preventing similar named-argument mismatches.
+
 ## 0.1.2 — 2026-11-06
 
 - Fixed the Remote Gateway registration error: `addModel` now uses a plain required-parameter signature; an omitted display name is handled by the existing string normalization.

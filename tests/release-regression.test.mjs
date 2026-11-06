@@ -26,3 +26,27 @@ test('Local AI panel and long scan-results page have working scroll containers',
   assert.match(css, /\.dlwb\s*\{[^}]*overflow-y:\s*auto/s)
   assert.match(css, /\.dlwb-file-list\s*\{[^}]*display:\s*flex/s, 'scan results must remain in normal document flow so the panel scrollbar can reach every result')
 })
+
+test('every exported Remote method has Host parameter names matching its Client descriptor', async () => {
+  const host = await fs.readFile(path.join(root, 'lib/index.js'), 'utf8')
+  const client = await fs.readFile(path.join(root, 'lib/client.js'), 'utf8')
+  const exposed = [
+    'getState', 'refreshModels', 'saveSettings', 'scanDirectory', 'addModel',
+    'removeModel', 'saveModelOptions', 'start', 'stop', 'testEngine',
+    'registerModel', 'searchHub', 'downloadHubModel', 'cancelDownload',
+  ]
+  for (const method of exposed) {
+    const clientMatch = client.match(new RegExp(`descriptor\\('${method}', \\[([^\\]]*)\\]\\)`))
+    assert.ok(clientMatch, `Client descriptor for ${method} must exist`)
+    const clientNames = clientMatch[1]
+      .split(',')
+      .map((part) => part.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(Boolean)
+
+    const hostMatch = host.match(new RegExp(`async\\s+${method}\\s*\\(([^)]*)\\)\\s*\\{`))
+    assert.ok(hostMatch, `Host method ${method} must exist`)
+    const hostNames = hostMatch[1].trim() ? hostMatch[1].split(',').map((part) => part.trim()) : []
+    assert.ok(hostNames.every((name) => /^[A-Za-z_$][\w$]*$/.test(name)), `${method} must use plain identifier parameters`)
+    assert.deepEqual(hostNames, clientNames, `${method}: Host arguments must match Client descriptor wire fields in order`)
+  }
+})
