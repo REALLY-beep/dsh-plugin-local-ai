@@ -28,3 +28,12 @@
 - Public Hugging Face GGUF search/download with progress and cancellation.
 - Host/client separation, local-only server binding, path validation, and unit tests.
 - DSH exposes only the registered model that matches the running llama-server alias.
+
+
+## 0.1.4
+
+- Reworked Hugging Face discovery to mirror the Models catalogue with server-side `apps=llama.cpp` search and a `filter=gguf` fallback.
+- Added query normalization for spaced model names and a model-family fallback when the exact phrase returns no results.
+- Added simple sorting (trending, downloads, likes, recently updated), repository links, download/like counts, last-updated date, GGUF file count, and per-file size when available.
+- Only standalone GGUF checkpoints are offered for one-click download; `mmproj` files and split GGUF shards are hidden to avoid incomplete downloads.
+- Increased the result cap to 24 repositories and retained the existing local-only inference path.

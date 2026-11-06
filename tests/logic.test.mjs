@@ -4,6 +4,8 @@ import {
   DEFAULT_MODEL_OPTIONS,
   DEFAULT_SETTINGS,
   buildHubDownloadUrl,
+  buildHubSearchUrls,
+  buildHubSearchQueries,
   buildServerArgs,
   describeModelFile,
   formatBytes,
@@ -12,6 +14,8 @@ import {
   normalizeSettings,
   safeHubFilename,
   safeHubRepoId,
+  sanitizeHubModels,
+  mergeHubSearchResults,
 } from '../lib/logic.js'
 
 test('settings normalization rejects invalid ports and keeps safe defaults', () => {
@@ -73,4 +77,55 @@ test('human-readable byte sizes', () => {
   assert.equal(formatBytes(0), '0 B')
   assert.equal(formatBytes(1024), '1.00 KB')
   assert.equal(formatBytes(1024 * 1024 * 1024), '1.00 GB')
+})
+
+
+test('Hugging Face search mirrors llama.cpp model discovery and has a GGUF fallback', () => {
+  const requests = buildHubSearchUrls('Qwen3', 'trending')
+  assert.equal(requests.length, 2)
+  const primary = new URL(requests[0].url)
+  const fallback = new URL(requests[1].url)
+  assert.equal(primary.searchParams.get('search'), 'Qwen3')
+  assert.equal(primary.searchParams.get('apps'), 'llama.cpp')
+  assert.equal(primary.searchParams.get('sort'), 'trendingScore')
+  assert.equal(primary.searchParams.get('expand[]'), 'siblings')
+  assert.equal(fallback.searchParams.get('filter'), 'gguf')
+  assert.equal(fallback.searchParams.get('sort'), 'trendingScore')
+})
+
+test('Hugging Face results keep standalone GGUF files and discard projectors and split shards', () => {
+  const models = sanitizeHubModels([{
+    id: 'bartowski/Qwen3-GGUF',
+    downloads: 1200,
+    likes: 12,
+    lastModified: '2026-11-01T00:00:00.000Z',
+    siblings: [
+      { rfilename: 'Qwen3-Q4_K_M.gguf', size: 1234 },
+      { rfilename: 'mmproj-Qwen3.gguf', size: 100 },
+      { rfilename: 'Qwen3-00001-of-00002.gguf', size: 500 },
+      { rfilename: 'README.md', size: 10 },
+    ],
+  }], 'llama.cpp')
+  assert.equal(models.length, 1)
+  assert.equal(models[0].author, 'bartowski')
+  assert.equal(models[0].fileCount, 1)
+  assert.equal(models[0].files[0].name, 'Qwen3-Q4_K_M.gguf')
+  assert.equal(models[0].files[0].sizeBytes, 1234)
+})
+
+test('Hugging Face results merge duplicate repos and retain their files', () => {
+  const base = { id: 'bartowski/Example-GGUF', author: 'bartowski', downloads: 20, likes: 2, lastModified: '', fileCount: 1, source: 'llama.cpp', files: [{ name: 'A-Q4.gguf', sizeBytes: 10 }] }
+  const fallback = { ...base, source: 'gguf', downloads: 22, files: [{ name: 'B-Q5.gguf', sizeBytes: 20 }] }
+  const merged = mergeHubSearchResults([[base], [fallback]])
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].downloads, 22)
+  assert.deepEqual(merged[0].sources, ['llama.cpp', 'gguf'])
+  assert.deepEqual(merged[0].files.map((file) => file.name), ['A-Q4.gguf', 'B-Q5.gguf'])
+})
+
+
+test('Hugging Face search normalizes spaced model names and has a family fallback', () => {
+  assert.deepEqual(buildHubSearchQueries('Qwen3 8B GGUF'), ['Qwen3 8B GGUF', 'Qwen3-8B-GGUF', 'Qwen3'])
+  assert.deepEqual(buildHubSearchQueries('Qwen3'), ['Qwen3'])
+  assert.deepEqual(buildHubSearchQueries(''), [''])
 })

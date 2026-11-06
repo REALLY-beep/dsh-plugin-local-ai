@@ -50,3 +50,14 @@ test('every exported Remote method has Host parameter names matching its Client 
     assert.deepEqual(hostNames, clientNames, `${method}: Host arguments must match Client descriptor wire fields in order`)
   }
 })
+
+
+test('Hugging Face panel contains minimal catalogue search, sorting and file selection', async () => {
+  const client = await fs.readFile(path.join(root, 'lib/client.js'), 'utf8')
+  assert.match(client, /descriptor\('searchHub', \[\s*'query', 'sort'\s*\]\)/)
+  assert.match(client, /Сначала ищем модели с фильтром llama\.cpp/)
+  assert.match(client, /Недавно обновлённые/)
+  assert.match(client, /Файл модели/)
+  assert.match(client, /downloadHubModel', repo\.id, hubSelection/)
+  assert.match(client, /mmproj/)
+})
