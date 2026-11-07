@@ -66,7 +66,7 @@ test('Hugging Face panel contains minimal catalogue search, sorting and file sel
 })
 
 
-test('provider registration is verified after mutation and avoids unverified reasoning claims', async () => {
+test('provider registration adds only runtime-verified reasoning levels', async () => {
   const source = await fs.readFile(path.join(root, 'lib/index.js'), 'utf8')
   const body = source.slice(source.indexOf('  async registerModel(id) {'), source.indexOf('  async searchHub('))
   assert.match(body, /this\.ctx\.settings\.mutate/)
@@ -75,7 +75,8 @@ test('provider registration is verified after mutation and avoids unverified rea
   assert.match(body, /DSH не подтвердил регистрацию модели/)
   assert.match(body, /const visionVerified = await this\.hasCurrentVisionVerification\(model\)/)
   assert.match(body, /input: visionVerified \? \['text', 'image'\] : \['text'\]/)
-  assert.doesNotMatch(body, /reasoningEfforts/)
+  assert.match(body, /model\.reasoningRuntimeHint\.status === 'supported'/)
+  assert.match(body, /reasoningEfforts: \{ \.\.\.model\.reasoningEfforts \}/)
 })
 
 test('downloadHubModel carries Hugging Face capability metadata into the local model', async () => {
@@ -159,4 +160,26 @@ test('getState does not expose host-side Vision fingerprints or local engine pat
 test('model library scanner ignores uncommitted temporary HF download folders', async () => {
   const scanner = await fs.readFile(path.join(root, 'lib/model-scanner.js'), 'utf8')
   assert.match(scanner, /entry\.name\.startsWith\('\.download-'\)/)
+})
+
+
+test('local provider installs the DSH human-request-last pre-step correction', async () => {
+  const host = await fs.readFile(path.join(root, 'lib/index.js'), 'utf8')
+  const ordering = await fs.readFile(path.join(root, 'lib/request-order.js'), 'utf8')
+  assert.match(host, /installHumanRequestLast\(ctx, PROVIDER_KEY/)
+  assert.match(ordering, /agent\/pre-step/)
+  assert.match(ordering, /\{ prepend: true \}/)
+  assert.match(ordering, /payload\.modelSelection\.provider !== providerKey/)
+  assert.match(ordering, /\[\.\.\.context, \.\.\.humans\]/)
+  assert.match(ordering, /source\.kind/)
+})
+
+test('reasoning levels are read from llama-server props and registered after model startup', async () => {
+  const host = await fs.readFile(path.join(root, 'lib/index.js'), 'utf8')
+  const reasoning = await fs.readFile(path.join(root, 'lib/reasoning.js'), 'utf8')
+  assert.match(host, /async inspectRuntimeReasoning\(model\)/)
+  assert.match(host, /\/props/)
+  assert.match(host, /await this\.inspectRuntimeReasoning\(loadedModel\)/)
+  assert.match(reasoning, /reasoning_effort_levels/)
+  assert.match(reasoning, /off: 'none'/)
 })

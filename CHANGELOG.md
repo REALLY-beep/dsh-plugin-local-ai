@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.10 — Local model request ordering and verified reasoning controls
+
+- Fixed DSH issue #10080 for the `dsh-local-ai` route: an `agent/pre-step` waterfall listener moves DSH-injected runtime/skill/time context messages before genuine `source.kind=user` messages, preserving every message and each group's order. No context is dropped, no tool is disabled, and non-local providers are untouched.
+- The correction runs after downstream pre-step contributors (`prepend: true`) and changes the admitted batch, so the corrected order is what DSH records and later replays; empty continuation/wake steps remain unchanged.
+- Added runtime inspection of llama.cpp `GET /props` and `chat_template_caps.reasoning_effort_levels`. The DSH Effort picker is declared only for levels the loaded GGUF Jinja template actually reports; `off` maps to llama.cpp's documented `reasoning_effort: none`.
+- On model startup, refreshes the DSH model descriptor with the detected Reasoning Effort levels. If the template reports no selectable levels, the Local AI model card explains that reasoning may be intrinsic/default but cannot be honestly toggled through the Effort picker.
+- Added regression tests for injected-message ordering, provider scoping, continuation safety, and llama.cpp reasoning-capability parsing.
+
 ## 0.1.9 — DSH runtime orientation
 
 - Added a system-level `ctx.systemPrompt.section()` contribution that explains the model's role inside DeepSeek Harness and frames `Current runtime context` snapshots as machine-generated environment metadata, not as a user request or command.

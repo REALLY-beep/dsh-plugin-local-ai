@@ -27,3 +27,12 @@ A model is not declared image-capable from Hub tags alone. The local catalog sto
 ## Runtime orientation prompt
 
 The Host service injects the shared `systemPrompt` service and registers a unique global system section (`local-ai-workbench:runtime-orientation`, order 100). DSH's dynamic `Current runtime context` is a separate sourced user-role snapshot; this section explicitly frames that snapshot as machine-generated environment metadata rather than a task. It distinguishes the workspace root, file-policy constraints, Harness installation checkout, Web GUI endpoint and skill catalogue, and tells the agent to act only on the latest user-authored request. The section is additive: it does not set `complete: true`, replace the built-in Harness identity, shadow the Agent Preset persona, or disable runtime context and tools. Cordis owns disposal of the section when the plugin unloads.
+
+
+## DSH local-model request ordering
+
+The local provider installs a listener on the `agent/pre-step` waterfall with `{ prepend: true }`. The listener waits for `next()` so it sees the fully composed message batch, then partitions messages by `source.kind`: real human input is `user`; all other messages in this user-message batch are Harness context. It moves context first and human messages last, preserving original order and object identity. It only applies when `payload.modelSelection.provider === 'dsh-local-ai'`. It never drops context and does not modify other providers or continuation steps with no human message. This mirrors the workaround described in DSH discussion #10080 and the standalone `dsh-human-request-last` plugin.
+
+## Reasoning effort discovery
+
+After the local server becomes healthy, the Host reads `GET /props` and inspects `chat_template_caps.reasoning_effort_levels`. Only those real levels are written to the model's DSH `reasoningEfforts`; the `off` entry maps to llama.cpp's documented `reasoning_effort: none`. If the template exposes no effort levels or `/props` is unavailable, the plugin removes any stale effort declaration and shows the reason in the model card instead of guessing from a model name.

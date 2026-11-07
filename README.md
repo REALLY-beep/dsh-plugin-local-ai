@@ -1,10 +1,20 @@
+
 # DSH Local AI Workbench
+
+Плагин для **DSH Desktop / DeepSeek Harness**, который добавляет в интерфейс **Local AI** для локальных GGUF через `llama-server`.
+
+## Local model conversation compatibility
+
+For the `dsh-local-ai` provider, the plugin corrects the DSH local-model message-order issue documented in DeepSeek Harness discussion #10080. The `agent/pre-step` waterfall moves harness-injected context (runtime, skills, time, etc.) before real messages whose `source.kind` is `user`. It preserves all messages and their source metadata, does not affect other providers, and leaves wake/continuation steps without a human message unchanged. This is an ordering fix, not a prompt-only instruction.
+
+After llama-server starts, the plugin reads `GET /props` → `chat_template_caps.reasoning_effort_levels`. Only the actual levels reported by the loaded GGUF chat template are declared as DSH `reasoningEfforts`; `off` is sent as `reasoning_effort: none`. Some reasoning-tuned models have no template-level effort control. In that case the plugin deliberately does not fabricate a DSH picker; it shows the detection result in the model card.
+
 
 Плагин для **DSH Desktop / DeepSeek Harness**, который добавляет в интерфейс раздел **Local AI** для локальных моделей в формате GGUF. Запуск моделей выполняет `llama.cpp` через `llama-server`; облачный API для генерации не используется.
 
 ## Что умеет
 
-Текущая версия: **0.1.9**. Панель и результаты сканирования имеют собственную вертикальную прокрутку внутри окна DSH.
+Текущая версия: **0.1.10**. Панель и результаты сканирования имеют собственную вертикальную прокрутку внутри окна DSH.
 
 - Отдельная центральная панель Local AI, зарегистрированная через официальные слоты DSH `sidebar.panellist` и `main`. DSH сам размещает неподкреплённые панели в меню More; закрепление/расположение остаётся за интерфейсом DSH.
 - Библиотека GGUF: рекурсивное обнаружение файлов во всех вложенных папках каталога моделей, добавление по полному пути, метаданные файла и квантования, сохранение каталога между перезапусками.
