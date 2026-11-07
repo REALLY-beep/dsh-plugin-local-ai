@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9 — DSH runtime orientation
+
+- Added a system-level `ctx.systemPrompt.section()` contribution that explains the model's role inside DeepSeek Harness and frames `Current runtime context` snapshots as machine-generated environment metadata, not as a user request or command.
+- Clarified the meaning of working directory, DSH file policy, application checkout path, Web GUI URL, and available-skills catalogue; models are told not to launch skills or workflows just because they appear in the snapshot.
+- The section is registered once at system-prompt order 100, after the deployment persona and before plan/tool policies; it uses a unique name and is removed through the normal Cordis disposer.
+- Added regression tests for section identity/order, key safety guidance, and disposer behavior.
+
 ## 0.1.8 — context policy and memory estimate
 
 - Added bounded GGUF metadata reader for transformer dimensions used to estimate F16 KV-cache memory at the currently selected context length.
