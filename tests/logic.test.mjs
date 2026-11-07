@@ -17,6 +17,8 @@ import {
   buildServerArgs,
   describeModelFile,
   formatBytes,
+  estimateKvCacheBytes,
+  formatGiB,
   modelIdFromPath,
   normalizeModelOptions,
   normalizeSettings,
@@ -69,6 +71,14 @@ test('model metadata gets a stable ID and quantization label', () => {
   const model = describeModelFile('/models/Qwen3-8B-Q4_K_M.gguf', 1024 * 1024)
   assert.equal(model.quantization, 'Q4_K_M')
   assert.equal(model.sizeLabel, '1.00 MB')
+})
+
+
+test('KV-cache estimator reports approximate F16 context memory in GiB', () => {
+  const metadata = { bytesPerToken: 131072 }
+  assert.equal(estimateKvCacheBytes(metadata, 8192), 1024 ** 3)
+  assert.equal(formatGiB(estimateKvCacheBytes(metadata, 8192)), '1.00 GiB')
+  assert.equal(estimateKvCacheBytes(null, 8192), null)
 })
 
 test('Hugging Face repository and filename validation blocks traversal', () => {

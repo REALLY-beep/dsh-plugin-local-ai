@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.8 — context policy and memory estimate
+
+- Added bounded GGUF metadata reader for transformer dimensions used to estimate F16 KV-cache memory at the currently selected context length.
+- Context slider now updates a live GiB estimate and clearly distinguishes KV-cache from model weights/total system memory. Hybrid/state-space metadata is marked as partial instead of claiming a complete estimate.
+- Added a guarded Windows context-patch installer (`APPLY-CONTEXT-FIX.cmd`) that extracts the exact shipped `preset-standard` from `dsh --dump-default-config`, changes only nested `compaction-basic.headroomTokens` and `maxTokens` to 1024, backs up the existing profile patch, and verifies the effective nested preset with `dsh --dump-config`; it restores the original profile file if verification fails.
+- The installer replaces the complete shipped `preset-standard` row because DSH does not let a profile patch reach `compaction-basic` nested inside the preset. It preserves the whole current standard preset and all of its tools; rerunning it is idempotent.
+- Fixed GGUF metadata scanning so it continues through the bounded metadata table and detects SSM/Mamba metadata even when it appears after attention dimensions.
+- Context slider shows a live approximate F16 KV-cache size in GiB from GGUF geometry and lists the GGUF file size separately. It does not claim the estimate is total RAM/VRAM.
+- No model files, model catalog, or engine settings are modified by the context patch script.
+
+
 ## 0.1.7 — 2026-11-07
 
 - Added GGUF Vision support through a separately selected `mmproj` projector and llama.cpp `--mmproj` launch argument.

@@ -1,6 +1,6 @@
 {
   "name": "dsh-local-ai-workbench",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "DSH desktop plugin for managing and running local GGUF models with llama.cpp",
   "type": "module",
   "main": "lib/index.js",
@@ -12,6 +12,8 @@
   },
   "files": [
     "lib",
+    "scripts",
+    "APPLY-CONTEXT-FIX.cmd",
     "cordis.patch.yml",
     "README.md",
     "CHANGELOG.md",
@@ -22,7 +24,7 @@
   "icon": "./images/icon.svg",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check lib/index.js && node --check lib/client.js && node --check lib/logic.js && node --check lib/model-scanner.js && node --test tests/*.test.mjs"
+    "check": "node --check lib/index.js && node --check lib/client.js && node --check lib/logic.js && node --check lib/model-scanner.js && node --check lib/gguf-metadata.js && node --test tests/*.test.mjs"
   },
   "engines": {
     "node": ">=20",
