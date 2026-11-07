@@ -4,9 +4,12 @@ import {
   DEFAULT_MODEL_OPTIONS,
   DEFAULT_SETTINGS,
   buildHubDownloadUrl,
+  buildHubDownloadPlan,
+  sanitizeHubTreeInventory,
   buildHubSearchUrls,
   buildHubSearchQueries,
   buildHubTreeUrl,
+  getNextHubTreePageUrl,
   extractParameterCountB,
   extractQuantization,
   filterHubModelsByWeight,
@@ -21,6 +24,10 @@ import {
   safeHubRepoId,
   sanitizeHubModels,
   mergeHubSearchResults,
+  inferModelCapabilities,
+  describeCapabilitySupport,
+  withCapabilitySupport,
+  sanitizeHubRepositoryMetadata,
 } from '../lib/logic.js'
 
 test('settings normalization rejects invalid ports and keeps safe defaults', () => {
@@ -101,7 +108,7 @@ test('Hugging Face search mirrors llama.cpp model discovery and has a GGUF fallb
   assert.equal(new URL(filtered[1].url).searchParams.get('num_parameters'), 'min:8B,max:14B')
 })
 
-test('Hugging Face results keep standalone GGUF files and discard projectors and split shards', () => {
+test('Hugging Face results keep projector metadata and reject incomplete split-shard groups', () => {
   const models = sanitizeHubModels([{
     id: 'bartowski/Qwen3-GGUF',
     downloads: 1200,
@@ -138,6 +145,19 @@ test('Hugging Face search normalizes spaced model names and has a family fallbac
   assert.deepEqual(buildHubSearchQueries(''), [''])
 })
 
+
+
+test('Hugging Face tree pagination follows only same-repository HTTPS next links', () => {
+  const current = buildHubTreeUrl('user/model', 'a'.repeat(40))
+  const next = 'https://huggingface.co/api/models/user/model/tree/' + 'a'.repeat(40) + '?recursive=true&cursor=next-token'
+  assert.equal(
+    getNextHubTreePageUrl(`<${next}>; rel="next", <${current}>; rel="first"`, current, 'user/model', 'a'.repeat(40)),
+    next,
+  )
+  assert.equal(getNextHubTreePageUrl(`<${current}>; rel="prev"`, current, 'user/model', 'a'.repeat(40)), '')
+  assert.throws(() => getNextHubTreePageUrl('<https://evil.example/next>; rel="next"', current, 'user/model', 'a'.repeat(40)), /за пределами дерева/)
+  assert.throws(() => getNextHubTreePageUrl(`<https://huggingface.co/api/models/user/other/tree/${'a'.repeat(40)}?cursor=x>; rel="next"`, current, 'user/model', 'a'.repeat(40)), /за пределами дерева/)
+})
 
 test('Hugging Face GGUF metadata parses parameter count, quantization and exact tree file size', () => {
   assert.equal(extractParameterCountB('bartowski/Qwen3-8B-GGUF'), 8)
@@ -178,4 +198,134 @@ test('Hugging Face GGUF weight filter filters individual quant files by exact by
   assert.equal(filtered[0].files[0].name, 'Qwen3-8B-Q4.gguf')
   assert.equal(filterHubModelsByWeight(models, 'from20GB').length, 0)
   assert.equal(filterHubModelsByWeight(models, 'any')[0].fileCount, 4)
+})
+
+
+test('Hugging Face metadata exposes conservative model capability hints', () => {
+  const models = sanitizeHubModels([{
+    id: 'Qwen/Qwen2.5-VL-7B-Instruct',
+    pipeline_tag: 'image-text-to-text',
+    tags: ['transformers', 'vision', 'tool-calling'],
+    siblings: [{ rfilename: 'Qwen2.5-VL-7B-Q4_K_M.gguf', size: 1024 }],
+  }], 'llama.cpp')
+  assert.equal(models.length, 1)
+  assert.equal(models[0].pipelineTag, 'image-text-to-text')
+  assert.equal(models[0].llamaCppListed, true)
+  assert.ok(models[0].capabilities.some((item) => item.id === 'vision'))
+  assert.ok(models[0].capabilities.some((item) => item.id === 'tools'))
+})
+
+test('capability inference distinguishes code, reasoning, embeddings and audio tasks', () => {
+  const code = inferModelCapabilities('Qwen/Qwen2.5-Coder-7B')
+  assert.ok(code.some((item) => item.id === 'code'))
+  const reasoning = inferModelCapabilities('deepseek-ai/DeepSeek-R1-Distill-Qwen-7B')
+  assert.ok(reasoning.some((item) => item.id === 'reasoning'))
+  const embeddings = inferModelCapabilities('sentence-transformers/all-MiniLM-L6-v2', 'feature-extraction')
+  assert.ok(embeddings.some((item) => item.id === 'embeddings'))
+  assert.ok(!embeddings.some((item) => item.id === 'chat'))
+  const audio = inferModelCapabilities('openai/whisper-large-v3', 'automatic-speech-recognition')
+  assert.ok(audio.some((item) => item.id === 'audio'))
+})
+
+test('downloaded Hub metadata is compact and derives its own capability labels', () => {
+  const metadata = sanitizeHubRepositoryMetadata({
+    pipelineTag: 'text-generation',
+    tags: ['code', 12, 'tools'],
+    sources: ['llama.cpp', 'gguf', 'unsafe'],
+  }, 'bartowski/Qwen-Coder-7B-GGUF')
+  assert.equal(metadata.repoId, 'bartowski/Qwen-Coder-7B-GGUF')
+  assert.equal(metadata.llamaCppListed, true)
+  assert.deepEqual(metadata.tags, ['code', 'tools'])
+  assert.ok(metadata.capabilities.some((item) => item.id === 'code'))
+  assert.throws(() => sanitizeHubRepositoryMetadata({}, 'https://example.com/evil'))
+})
+
+
+test('describeCapabilitySupport separates model claims from plugin support', () => {
+  assert.equal(describeCapabilitySupport('chat').status, 'supported')
+  assert.equal(describeCapabilitySupport('code').status, 'supported')
+  assert.equal(describeCapabilitySupport('tools').status, 'conditional')
+  assert.equal(describeCapabilitySupport('tools', { options: { jinja: false } }).status, 'unsupported')
+  assert.equal(describeCapabilitySupport('reasoning').status, 'conditional')
+  assert.equal(describeCapabilitySupport('vision').status, 'conditional')
+  assert.equal(describeCapabilitySupport('vision', { mmprojPath: 'mmproj-model-f16.gguf' }).status, 'conditional')
+  assert.equal(describeCapabilitySupport('vision', { mmprojPath: 'mmproj-model-f16.gguf', visionVerifiedAt: '2026-11-07T00:00:00Z' }).status, 'supported')
+  assert.equal(describeCapabilitySupport('audio').status, 'unsupported')
+  assert.equal(describeCapabilitySupport('embeddings').status, 'unsupported')
+  assert.equal(describeCapabilitySupport('rerank').status, 'unsupported')
+})
+
+
+test('withCapabilitySupport annotates model capability hints without mutating the model', () => {
+  const original = { id: 'local', options: { jinja: false }, capabilities: [{ id: 'tools', label: 'Tools', icon: '🧰' }] }
+  const result = withCapabilitySupport(original)
+  assert.equal(result.capabilities[0].status, 'unsupported')
+  assert.equal(result.capabilities[0].mark, '×')
+  assert.equal(original.capabilities[0].status, undefined)
+})
+
+
+test('server command passes the selected multimodal projector as a separate argv value', () => {
+  const argv = buildServerArgs({
+    executable: 'E:\\llama\\llama-server.exe',
+    modelPath: 'E:\\models\\gemma-3.gguf',
+    mmprojPath: 'E:\\models\\mmproj-model-f16.gguf',
+    port: 12345,
+    apiKey: '',
+    alias: 'gemma-3',
+    options: { gpuLayers: 99 },
+  })
+  const index = argv.indexOf('--mmproj')
+  assert.ok(index >= 0)
+  assert.equal(argv[index + 1], 'E:\\models\\mmproj-model-f16.gguf')
+})
+
+test('Hugging Face download plan includes a paired mmproj and exact revision', () => {
+  const plan = buildHubDownloadPlan('repo/model-Q4_K_M.gguf', {
+    revision: 'a'.repeat(40),
+    mmprojFilename: 'mmproj-model-f16.gguf',
+    mmprojSizeBytes: 200,
+    downloadFiles: [{ name: 'repo/model-Q4_K_M.gguf', sizeBytes: 1000 }],
+  })
+  assert.equal(plan.revision, 'a'.repeat(40))
+  assert.equal(plan.files.length, 2)
+  assert.equal(plan.files[0].role, 'main')
+  assert.equal(plan.files[1].role, 'mmproj')
+  assert.equal(plan.expectedBytes, 1200)
+  assert.ok(buildHubDownloadUrl('user/model', plan.files[1].name, plan.revision).includes(`/resolve/${'a'.repeat(40)}/`))
+})
+
+test('Hugging Face download plan only accepts complete split-shard bundles', () => {
+  const plan = buildHubDownloadPlan('model-00001-of-00002.gguf', {
+    downloadFiles: [
+      { name: 'model-00002-of-00002.gguf', sizeBytes: 200 },
+      { name: 'model-00001-of-00002.gguf', sizeBytes: 100 },
+    ],
+    mmprojFilename: 'mmproj.gguf',
+  })
+  assert.deepEqual(plan.files.map((file) => file.name), [
+    'model-00001-of-00002.gguf',
+    'model-00002-of-00002.gguf',
+    'mmproj.gguf',
+  ])
+  assert.throws(() => buildHubDownloadPlan('model-00001-of-00003.gguf', {
+    downloadFiles: [{ name: 'model-00001-of-00003.gguf', sizeBytes: 100 }],
+  }), /Неполный GGUF-комплект/)
+  assert.throws(() => buildHubDownloadPlan('model.gguf', {
+    downloadFiles: [{ name: 'model.gguf', sizeBytes: 100 }, { name: 'other.gguf', sizeBytes: 100 }],
+  }), /посторонние GGUF-файлы/)
+})
+
+test('Hub tree inventory pairs projectors and records only complete shard groups', () => {
+  const inventory = sanitizeHubTreeInventory([
+    { path: 'model-00001-of-00002.gguf', size: 100, type: 'file' },
+    { path: 'model-00002-of-00002.gguf', size: 200, type: 'file' },
+    { path: 'mmproj-model-f16.gguf', size: 50, type: 'file' },
+    { path: 'other-00001-of-00002.gguf', size: 80, type: 'file' },
+  ], 'user/model')
+  assert.equal(inventory.files.length, 1)
+  assert.equal(inventory.files[0].shardCount, 2)
+  assert.equal(inventory.files[0].downloadFiles.length, 2)
+  assert.equal(inventory.projectors.length, 1)
+  assert.equal(inventory.incompleteShards.length, 1)
 })

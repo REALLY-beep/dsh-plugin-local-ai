@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.7 — 2026-11-07
+
+- Added GGUF Vision support through a separately selected `mmproj` projector and llama.cpp `--mmproj` launch argument.
+- Added a local synthetic-image probe against `/v1/chat/completions`; the DSH model advertises `input: ['text', 'image']` only after the image-input request succeeds.
+- Bound the Vision verification to the main GGUF, projector and llama-server executable fingerprints. Replacing any of them clears stale verification and downgrades the DSH model back to text input.
+- Added local recursive projector discovery. A single projector in the model folder is paired automatically; ambiguous folders require an explicit selection.
+- Hugging Face downloads now bundle the selected projector and all complete split-GGUF shards at one pinned repository revision.
+- Download each bundle into a temporary folder, verify every known byte size, and atomically move the whole set into the model library; cancellation/failure removes partial data and rolls back the catalog entry.
+- Added pagination for large Hugging Face repository trees and constrained next-page links to the same HTTPS repository/revision endpoint.
+- Added 39 regression checks for pagination, bundle planning, projector pairing, Vision declaration, stale-verification prevention, staging-folder isolation and Remote descriptors.
+
+## 0.1.6 — 2026-11-07
+
+- Capability badges now distinguish what the model advertises from what the current plugin actually supports: ✓ text/chat and code tasks, ~ conditional tool calling/reasoning, × vision/audio/embeddings/rerank not yet wired into this plugin.
+- Capability badges explain requirements in their tooltips; tool calls require Jinja and a compatible GGUF chat template.
+- Local model cards show the exact DSH model ID, making stale-session `no configured model` errors easier to diagnose.
+- Registration guidance now explains that existing DSH sessions retain their recorded model ID; re-register the intended model and start a new chat or reselect it in the existing session.
+
+- Added compact model-capability badges in the Hugging Face catalogue (chat, code, vision, audio, tools, reasoning, embeddings and reranking), derived from repository tags and pipeline metadata.
+- Added separate llama.cpp compatibility status: Hub catalogue listing is shown as a metadata claim, while a successful local llama-server health check is shown as an actual load verification.
+- Persisted Hugging Face capability metadata with downloaded local GGUF models.
+- Added registration read-back verification and surfaced the currently registered DSH model ID/name in the Local AI panel.
+- Removed guessed reasoning support from the local provider profile; only text input is declared until a feature is explicitly verified.
+- Added a UI warning that existing DSH conversations keep their previously selected model ID after switching the registered model.
+
 ## 0.1.5 — 2026-11-07
 
 - Added a Hugging Face parameter-count filter using the Hub's `num_parameters` search parameter.

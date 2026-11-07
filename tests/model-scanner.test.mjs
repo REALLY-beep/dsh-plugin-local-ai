@@ -31,6 +31,11 @@ test('recursive scanner finds GGUF files at arbitrary nesting depths', async () 
     assert.equal(result.skippedDirectories, 0)
     assert.equal(result.skippedFiles, 0)
     assert.equal(result.files.find((file) => file.name === 'root-model.gguf').sizeBytes, 4)
+    assert.equal(result.projectors.length, 1)
+    const llama = result.files.find((file) => file.name === 'llama.gguf')
+    assert.equal(llama, undefined)
+    const llamaFile = result.files.find((file) => file.name === 'llama-q5.GGUF')
+    assert.equal(llamaFile.mmprojPath, path.join(root, 'Llama', 'Quantizations', 'mmproj-model.gguf'))
   })
 })
 
@@ -64,4 +69,18 @@ test('recursive scanner validates the selected path', async () => {
     await fs.writeFile(file, 'x')
     await assert.rejects(() => scanGgufDirectory(file), /не является папкой/)
   })
+})
+
+
+test('recursive scanner ignores temporary download bundles until the atomic commit', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-local-ai-staging-'))
+  try {
+    await fs.mkdir(path.join(root, '.download-pending'), { recursive: true })
+    await fs.writeFile(path.join(root, '.download-pending', 'model-Q4_K_M.gguf'), 'partial bundle component')
+    await fs.writeFile(path.join(root, 'ready-Q4_K_M.gguf'), 'complete model')
+    const result = await scanGgufDirectory(root)
+    assert.deepEqual(result.files.map((item) => item.name), ['ready-Q4_K_M.gguf'])
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
 })
